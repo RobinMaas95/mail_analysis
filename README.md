@@ -52,6 +52,7 @@ A small script to analyze a list of email addresses. It gives you an overview of
 <img src="docs/images/example_domains.png" title="Home Page" width="100%">
 
 **Domain Provider:**
+Note: Since the feature provider was added later, this plot was generated on newly generated data. Therefore, it does not match the values of the other plots.
 <img src="docs/images/example_provider.png" title="Home Page" width="100%">
 
 **Top Level Domain Overview:**
