@@ -51,6 +51,8 @@ A small script to analyze a list of email addresses. It gives you an overview of
 **Domain Overview:**
 <img src="docs/images/example_domains.png" title="Home Page" width="100%">
 
+**Domain Provider:**
+<img src="docs/images/example_provider.png" title="Home Page" width="100%">
 
 **Top Level Domain Overview:**
 <img src="docs/images/example_top_level_domains.png" title="Home Page" width="100%">

@@ -122,8 +122,23 @@ def get_base_df(email_addresses: list) -> pd.DataFrame:
             "email_addresses": email_addresses,
             "domains": domains,
             "top_level_domains": top_level_domains,
+            "provider": domains,
         }
     )
+    # Determine the provider of the email address
+    # Cleanup shorthand and alternativ mail addresses
+    df = rename_column_entries(df, "pm.me", "protonmail.com", "com")
+    df = rename_column_entries(df, "googlemail.com", "gmail.com", "com")
+    df = rename_column_entries(df, "hotmail.com", "outlook.com", "com")
+    df = rename_column_entries(df, "hotmail.fr", "outlook.com", "com")
+    df = rename_column_entries(df, "live.com", "outlook.com", "com")
+    df = rename_column_entries(df, "live.be", "outlook.com", "com")
+    df = rename_column_entries(df, "live.co.uk", "outlook.com", "com")
+    df = rename_column_entries(df, "me.com", "icloud.com", "com")
+    df = rename_column_entries(df, "ymail.com", "yahoo.com", "com")
+    df = rename_column_entries(df, "gmx.net", "gmx.de", "de")
+    # Change domain to the provider
+    df.provider = get_provider_list(df)
 
     return df
 
@@ -151,26 +166,24 @@ def rename_column_entries(
     pd.DataFrame
         Dataframe with the new values.
     """
-    try:
-        splitted_mail = (
-            df[df.domains == target_domain].email_addresses.item().split("@")
-        )
-    except ValueError:
-        # Raised when the target domain is not found in the df, no need for further processing
-        return df
-    corrected_mail = splitted_mail[0] + "@" + new_domain
+    target_entries = df[df.domains == target_domain].email_addresses
+    for _, email in target_entries.iteritems():
+        splitted_mail = email.split("@")
+        corrected_mail = splitted_mail[0] + "@" + new_domain
 
-    df["email_addresses"] = df["email_addresses"].replace(
-        df[df.domains == target_domain].email_addresses.to_list(), corrected_mail
-    )
-    df["top_level_domains"] = (
-        df["top_level_domains"]
-        .replace(df[df.domains == target_domain].top_level_domains.to_list(), new_tld)
-        .to_list()
-    )
-    df["domains"] = df["domains"].replace(
-        df[df.domains == target_domain].domains.to_list(), new_domain
-    )
+        df["email_addresses"] = df["email_addresses"].replace(
+            df[df.domains == target_domain].email_addresses.to_list(), corrected_mail
+        )
+        df["top_level_domains"] = (
+            df["top_level_domains"]
+            .replace(
+                df[df.domains == target_domain].top_level_domains.to_list(), new_tld
+            )
+            .to_list()
+        )
+        df["provider"] = df["provider"].replace(
+            df[df.domains == target_domain].domains.to_list(), new_domain
+        )
 
     return df
 
@@ -266,14 +279,18 @@ def create_world_plot(df: pd.DataFrame, title: str, figsize: tuple) -> None:
     )
 
 
-def get_domain_plot(df: pd.DataFrame, title: str, x_label: str, y_label: str) -> None:
+def get_count_barplot(
+    df: pd.DataFrame, target_column: str, title: str, x_label: str, y_label: str
+) -> None:
     """
     Prepare data for the domain plot and create it.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Base dataframe with the columns email_addresses, domains and top_level_domains.
+        Base dataframe with the columns email_addresses, domains, top_level_domains and provider.
+    target_column : str
+        Column to be used for the plot.
     title : str
         Title of the plot. Will be used as filename too.
     x_label : str
@@ -281,14 +298,14 @@ def get_domain_plot(df: pd.DataFrame, title: str, x_label: str, y_label: str) ->
     y_label : str
         Label on the y-axis.
     """
-    domain_counts = df.domains.value_counts()
-    unique_domains = domain_counts[domain_counts == 1]
-    duplicated_domains = domain_counts[domain_counts > 1]
-    duplicated_domain_dict = duplicated_domains.to_dict()
-    duplicated_domain_dict["unique domains"] = len(unique_domains)
+    column_counts = df[target_column].value_counts()
+    unique_entries = column_counts[column_counts == 1]
+    common_entries = column_counts[column_counts > 1]
+    common_entries_dict = common_entries.to_dict()
+    common_entries_dict[f"unique {target_column}"] = len(unique_entries)
     create_barplot(
-        x_values=list(duplicated_domain_dict.keys()),
-        heights=list(duplicated_domain_dict.values()),
+        x_values=list(common_entries_dict.keys()),
+        heights=list(common_entries_dict.values()),
         title=title,
         x_label=x_label,
         y_label=y_label,
@@ -302,7 +319,7 @@ def get_world_plot(df: DataFrame, title: str, figsize: tuple) -> dict:
     Parameters
     ----------
     df : DataFrame
-        Base dataframe with the columns email_addresses, domains and top_level_domains.
+        Base dataframe with the columns email_addresses, domains, top_level_domains and provider.
     title : str
         Title of the plot. Will be used as filename too.
     figsize : tuple
@@ -338,6 +355,30 @@ def get_world_plot(df: DataFrame, title: str, figsize: tuple) -> dict:
     return country_counts  # We use this to create the pieplot later
 
 
+def get_provider_list(df: pd.DataFrame) -> list:
+    """
+    Get a list of all providers.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Base dataframe with the columns email_addresses, domains, top_level_domains and provider.
+
+    Returns
+    -------
+    list
+        A list of all providers.
+    """
+    provider_list = []
+    for _, domain in df.provider.iteritems():
+        if domain in mail_data.DOMAIN_TO_PROVIDER:
+            provider_list.append(mail_data.DOMAIN_TO_PROVIDER[domain])
+        else:
+            provider_list.append(domain)
+
+    return provider_list
+
+
 def get_country_list(df: pd.DataFrame) -> list:
     """
     Resolve the origin of the mail addresses.
@@ -348,7 +389,7 @@ def get_country_list(df: pd.DataFrame) -> list:
     Parameters
     ----------
     df : pd.DataFrame
-        Base dataframe with the columns email_addresses, domains and top_level_domains.
+        Base dataframe with the columns email_addresses, domains, top_level_domains and provider.
 
     Returns
     -------
@@ -398,13 +439,10 @@ def main():
     email_addresses = mail_data.EMAIL_ADDRESSES_STRING.split(";")
     df = get_base_df(email_addresses)
 
-    # Cleanup shorthand and alternativ mail addresses
-    df = rename_column_entries(df, "pm.me", "protonmail.com", "com")
-    df = rename_column_entries(df, "googlemail.com", "gmail.com", "com")
-
     # Plot data (create_ methods create the plot, get_ methods are wrapper methods that first
     # prepare data and internally call the corresponding create_ method.)
-    get_domain_plot(df, "Domains", "Domains", "Number of occurrences")
+    get_count_barplot(df, "domains", "domains", "domains", "Number of occurrences")
+    get_count_barplot(df, "provider", "provider", "provider", "Number of occurrences")
 
     top_level_domain_dict = df["top_level_domains"].value_counts().to_dict()
     create_barplot(
